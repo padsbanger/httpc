@@ -11,6 +11,16 @@
 
 char *error;
 
+// structs //
+
+struct sHttpRequest {
+  char method[8];
+  char url[256];
+
+};
+
+typedef struct sHttpRequest httpreq;
+
 
 int srv_init(int portno) {
   int s;
@@ -71,15 +81,87 @@ int cli_accept(int s) {
 
 }
 
+httpreq *parse_http(char *str) {
+  httpreq *req;
+  char *p;
+
+  req = malloc(sizeof(httpreq));
+
+  for (p=str; *p && *p !=' '; p++);
+  if( *p == ' ') {
+    *p = 0;
+  } else {
+    error = "parse_http() error";
+    free(req);
+    return 0;
+  }
+  
+  strncpy(req->method, str, 7);
+
+  for (str=++p; *p && *p !=' '; p++);
+  if( *p == ' ') {
+    *p = 0;
+  } else {
+    error = "parse_http() error";
+    free(req);
+    return 0;
+  }
+  
+  strncpy(req->url, str, 255);
+
+
+  return req;
+ 
+}
+
+char *cli_read(int c) {
+  static char buf[512];
+  memset(buf, 0, 512);
+  if (read(c, buf, 511) < 0) {
+    error = "read() error";
+    return 0;
+  } else {
+    return buf;
+  }
+
+}
+
 void client_conn(int s, int c) {
+
+  httpreq *req;
+  char buf[512];
+  char *p;
+
+  p = cli_read(c);
+
+  if(!p) {
+    close(c);
+    return ;
+  }
+
+
+  req = parse_http(p);
+
+  if(!req) {
+    close(c);
+    return ;
+  }
+
+  printf("%s\n", req->method);
+  printf("%s\n", req->url);
+
+  free(req);
+  close(c);
+
   return ;
+
 }
 
 
 int main(int argc, char *argv[]) {
-  int s, c;
+  int s, c, n;
   char *port;
-
+  
   if (argc < 2) {
     fprintf(stderr, "Usage: %s <listening port> \n", argv[0]);
     return -1;
@@ -94,7 +176,7 @@ int main(int argc, char *argv[]) {
     }
 
     
-    printf("Listennin on %s:%s\n", LISTENADDR, port);
+    printf("Listening on %s:%s\n", LISTENADDR, port);
 
     while(1) {
       c = cli_accept(s);
@@ -102,7 +184,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "%s\n", error);
         continue;
       }
-      printf("Incoming conneciton \n");
+      printf("Incoming connection:  \n");
       
       if( !fork()) {
         client_conn(s, c);
